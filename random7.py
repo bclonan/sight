@@ -72,10 +72,14 @@ class ResonanceGrid:
 def main():
     root = tk.Tk()
     root.title("Resonance Grid Simulation")
-    base_grid = pd.read_csv('a.csv', header=None).values.tolist()
+   base_grid = pd.read_csv('a.csv', header=None).values.tolist()
 
     # Replace with your method of generating grid values
     resonance_grid = ResonanceGrid(base_grid)
+    # Replace with your method of generating grid values
+    grid_values = [[random.randint(0, 9)
+                    for _ in range(100)] for _ in range(100)]
+    resonance_grid = ResonanceGrid(grid_values)
 
     canvas = tk.Canvas(root, width=1000, height=1000)
     canvas.pack()
