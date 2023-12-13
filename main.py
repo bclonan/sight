@@ -1,37 +1,26 @@
 import tkinter as tk
-import random
+from tkinter import filedialog
+from PIL import Image, ImageDraw
 import colorsys
-import pandas as pd
-
-# Cell class to represent each cell in the grid
+import os
+import hashlib
 
 
 class Cell:
-    def __init__(self, value, schema='default_schema', machine_set='default_set'):
+    def __init__(self, value):
         self.value = value
-        self.schema = schema
-        self.machine_set = machine_set
         self.color = self.calculate_color()
 
-    # Calculate the color based on the value, schema, and machine set
     def calculate_color(self):
         hue = (self.value * 36) % 360
-        if self.schema == 'schema1' and self.machine_set == 'set1':
-            hue += 50
-        elif self.schema == 'schema2' and self.machine_set == 'set2':
-            hue += 100
         r, g, b = colorsys.hls_to_rgb(hue / 360, 0.5, 1)
         return f'#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}'
-
-# ResonanceGrid class to manage the grid
 
 
 class ResonanceGrid:
     def __init__(self, matrix):
         self.grid = [[Cell(value) for value in row] for row in matrix]
-        self.current_frequency = 1
 
-    # Display the grid on a canvas
     def display(self, canvas):
         cell_size = 10
         for x, row in enumerate(self.grid):
@@ -40,58 +29,161 @@ class ResonanceGrid:
                                         (y + 1) * cell_size, (x + 1) * cell_size,
                                         fill=cell.color, outline='')
 
-    # Calculate the average color of the grid
-    def average_color(self):
-        total_r = total_g = total_b = 0
-        total_cells = len(self.grid) * len(self.grid[0])
+    def map_bits_to_grid(self, bitstream):
+        for i, bit in enumerate(bitstream):
+            x = i // len(self.grid[0])
+            y = i % len(self.grid[0])
+            if x >= len(self.grid):
+                break
+            self.grid[x][y].value = int(bit)
+            self.grid[x][y].color = self.grid[x][y].calculate_color()
+
+    def encode_grid_to_bitstream(self):
+        bits = ''
         for row in self.grid:
             for cell in row:
-                r, g, b = int(cell.color[1:3], 16), int(
-                    cell.color[3:5], 16), int(cell.color[5:7], 16)
-                total_r += r
-                total_g += g
-                total_b += b
-        avg_r = total_r / total_cells
-        avg_g = total_g / total_cells
-        avg_b = total_b / total_cells
-        return f'#{int(avg_r):02x}{int(avg_g):02x}{int(avg_b):02x}'
+                bits += str(cell.value)
+        return bits
 
-    # Apply resonance effect to the grid
-    def apply_resonance(self, frequency, root):
-        self.current_frequency = frequency
-        for row in self.grid:
-            for cell in row:
-                cell.value = (cell.value + frequency) % 10
-                cell.color = cell.calculate_color()
-        avg_color = self.average_color()
-        root.title(f"Resonance Grid Simulation - Average Color: {avg_color}")
+    def save_grid_as_image(self, file_path):
+        img_size = len(self.grid[0]) * 10, len(self.grid) * 10
+        img = Image.new('RGB', img_size)
+        draw = ImageDraw.Draw(img)
+        for x, row in enumerate(self.grid):
+            for y, cell in enumerate(row):
+                draw.rectangle([y * 10, x * 10, y * 10 + 9,
+                               x * 10 + 9], fill=cell.color)
+        img.save(file_path)
 
-# Main function to set up the Tkinter window and grid
+
+def file_to_grid(file_path):
+    with open(file_path, 'rb') as file:
+        content = file.read()
+    grid_size = int(len(content)**0.5)
+    matrix = [[int(content[i * grid_size + j])
+               for j in range(grid_size)] for i in range(grid_size)]
+    return matrix
+
+
+def grid_to_file(matrix, file_path):
+    grid_size = len(matrix)
+    content = ''.join(str(matrix[i][j])
+                      for i in range(grid_size) for j in range(grid_size))
+    with open(file_path, 'wb') as file:
+        file.write(content.encode())
+
+
+def generate_hash_from_grid(grid):
+    grid_state = ''.join(cell.color for row in grid for cell in row)
+    return hashlib.sha256(grid_state.encode()).hexdigest()
+
+
+def load_image(file_path):
+    img = Image.open(file_path)
+    width, height = img.size
+    matrix = [[0 for _ in range(width)] for _ in range(height)]
+    for x in range(width):
+        for y in range(height):
+            r, g, b = img.getpixel((x, y))
+            gray_value = int((r + g + b) / 3)  # Convert to grayscale
+            matrix[y][x] = 1 if gray_value > 128 else 0
+    return matrix
 
 
 def main():
     root = tk.Tk()
-    root.title("Resonance Grid Simulation")
-    base_grid = pd.read_csv('a.csv', header=None).values.tolist()
+    root.title("File to Grid Mapping")
+    root.geometry("1200x1000")
 
-    # Replace with your method of generating grid values
+    base_grid = file_to_grid('a.csv')
     resonance_grid = ResonanceGrid(base_grid)
 
     canvas = tk.Canvas(root, width=1000, height=1000)
-    canvas.pack()
+    canvas.pack(side=tk.LEFT)
 
-    # Redraw the grid
     def redraw():
         canvas.delete("all")
         resonance_grid.display(canvas)
 
-    # Event handler for mouse clicks
-    def on_click(event):
-        frequency = random.randint(1, 9)
-        resonance_grid.apply_resonance(frequency, root)
-        redraw()
+    file_path = None
 
-    canvas.bind("<Button-1>", on_click)
+    def load_file():
+        nonlocal file_path
+        file_path = filedialog.askopenfilename()
+        if file_path:
+            grid = file_to_grid(file_path)
+            resonance_grid = ResonanceGrid(grid)
+            redraw()
+            hash_value = generate_hash_from_grid(resonance_grid.grid)
+            print(f"Hash: {hash_value}")
+
+    load_button = tk.Button(root, text="Load File", command=load_file)
+    load_button.pack(side=tk.RIGHT, padx=20)
+
+    def save_grid():
+        nonlocal file_path
+        if file_path:
+            grid_to_file(resonance_grid.grid, file_path)
+            print("Grid saved to:", file_path)
+
+    save_button = tk.Button(root, text="Save Grid to File", command=save_grid)
+    save_button.pack(side=tk.RIGHT, padx=20)
+
+    def save_bitstream():
+        nonlocal file_path
+        if file_path:
+            bitstream = resonance_grid.encode_grid_to_bitstream()
+            save_path = filedialog.asksaveasfilename(
+                defaultextension=".txt", filetypes=[("Text files", "*.txt")])
+            if save_path:
+                with open(save_path, "w") as file:
+                    file.write(bitstream)
+                print("Bitstream saved to:", save_path)
+
+    save_bitstream_button = tk.Button(
+        root, text="Save Bitstream", command=save_bitstream)
+    save_bitstream_button.pack(side=tk.RIGHT, padx=20)
+
+    def save_grid_image():
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".png", filetypes=[("PNG files", "*.png")])
+        if save_path:
+            resonance_grid.save_grid_as_image(save_path)
+            print("Grid image saved to:", save_path)
+
+    save_image_button = tk.Button(
+        root, text="Save Grid as Image", command=save_grid_image)
+    save_image_button.pack(side=tk.RIGHT, padx=20)
+
+    def load_from_image():
+        nonlocal file_path, resonance_grid
+        file_path = filedialog.askopenfilename()
+        if file_path:
+            matrix = load_image(file_path)
+            resonance_grid = ResonanceGrid(matrix)
+            redraw()
+
+    load_from_image_button = tk.Button(
+        root, text="Load From Image", command=load_from_image)
+    load_from_image_button.pack(side=tk.RIGHT, padx=20)
+
+    def load_bitstream():
+        nonlocal file_path, resonance_grid
+        file_path = filedialog.askopenfilename(
+            filetypes=[("Text files", "*.txt")])
+        if file_path:
+            with open(file_path, "r") as file:
+                bitstream = file.read()
+            grid_size = int(len(bitstream)**0.5)
+            matrix = [[int(bitstream[i * grid_size + j])
+                       for j in range(grid_size)] for i in range(grid_size)]
+            resonance_grid = ResonanceGrid(matrix)
+            redraw()
+
+    load_bitstream_button = tk.Button(
+        root, text="Load Bitstream", command=load_bitstream)
+    load_bitstream_button.pack(side=tk.RIGHT, padx=20)
+
     redraw()
     root.mainloop()
 
