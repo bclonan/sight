@@ -1,6 +1,7 @@
-import tkinter as tk
-import random
 import colorsys
+import random
+import tkinter as tk
+
 import pandas as pd
 
 # Cell class to represent each cell in the grid
@@ -72,7 +73,7 @@ class ResonanceGrid:
 def main():
     root = tk.Tk()
     root.title("Resonance Grid Simulation")
-   base_grid = pd.read_csv('a.csv', header=None).values.tolist()
+    base_grid = pd.read_csv('a.csv', header=None).values.tolist()
 
     # Replace with your method of generating grid values
     resonance_grid = ResonanceGrid(base_grid)
