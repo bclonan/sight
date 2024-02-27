@@ -1,6 +1,7 @@
-import tkinter as tk
-import random
 import colorsys
+import random
+import tkinter as tk
+
 import pandas as pd
 
 # Cell class to represent each cell in the grid
